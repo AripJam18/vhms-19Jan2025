@@ -160,7 +160,6 @@ void displayDataOnNextion(String data) {
   saveDataToSD(parts);
 }
 
-
 void saveDataToSD(String parts[]) {
   // Format: CLIENT,DATE,TIME,RIT,PAYLOAD
   const char* filename = "/data.csv";
@@ -172,15 +171,36 @@ void saveDataToSD(String parts[]) {
     return;
   }
 
-  // Ambil tanggal, waktu, dan rit dari data yang diterima
-  String date = parts[6];   // Tanggal dalam format "19-1-2025"
-  String time = parts[7];   // Waktu
-  String rit = parts[8];    // Rit
-  String client = parts[5]; // Nama dump truck
-  String payload = parts[4] + "t"; // Payload dengan satuan
+  // Ambil data yang diperlukan
+  String client = parts[5];    // Nama dump truck
+  String payload = parts[4] + "t"; // Payload dengan satuan (t)
+  String rit = parts[8];       // Rit
+  String date = parts[6];      // Tanggal dalam format "dd-mm-yyyy"
+  String time = parts[7];      // Waktu dalam format "hh:mm:ss"
+
+  // Parsing tanggal (dd-mm-yyyy)
+  String day, month, year;
+  int firstDash = date.indexOf('-');
+  int secondDash = date.indexOf('-', firstDash + 1);
+
+  if (firstDash != -1 && secondDash != -1) {
+    day = date.substring(0, firstDash);
+    month = date.substring(firstDash + 1, secondDash);
+    year = date.substring(secondDash + 1);
+  } else {
+    // Jika format tanggal tidak valid, gunakan default
+    day = "01";
+    month = "01";
+    year = "2025";
+  }
+
+  // Pastikan waktu hanya memuat hh:mm:ss
+  if (time.indexOf(':') == -1) {
+    time = "00:00:00"; // Default jika format waktu tidak valid
+  }
 
   // Buat baris data CSV
-  String dataLine = client + "," + date + "," + time + "," + rit + "," + payload + "\n";
+  String dataLine = client + "," + year + "-" + month + "-" + day + "," + time + "," + rit + "," + payload + "\n";
 
   // Tulis data ke file
   file.print(dataLine);
@@ -189,6 +209,7 @@ void saveDataToSD(String parts[]) {
   TxtSDCard.setText("Data Saved");
   file.close();
 }
+
 
 
 
