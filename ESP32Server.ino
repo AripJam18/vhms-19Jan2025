@@ -62,7 +62,7 @@ void setup() {
   }
 }
 
-void loop() {
+void loop() { 
   WiFiClient client = server.available();
 
   if (client) {
@@ -70,52 +70,39 @@ void loop() {
     Serial.println("Client Connected");
     lastDataTime = millis();
 
-    // Baca permintaan HTTP dari klien
-    String request = client.readStringUntil('\r');
-    client.flush();
+    while (client.connected()) {
+      if (client.available()) {
+        String data = client.readStringUntil('\n');
+        data.trim();
 
-    // Periksa apakah klien meminta file /data.csv
-    if (request.indexOf("GET /data.csv") >= 0) {
-      serveCSVFile(client); // Fungsi untuk melayani file data.csv
-    } else {
-      // Proses data biasa
-      while (client.connected()) {
-        if (client.available()) {
-          String data = client.readStringUntil('\n');
-          data.trim();
+        Serial.println("Received Data: " + data);
 
-          Serial.println("Received Data: " + data);
-
-          // Periksa apakah data dimulai dengan '#' dan diakhiri dengan '*'
-          if (data.startsWith("#") && data.endsWith("*")) {
-            data = data.substring(1, data.length() - 1); // Menghapus '#' dan '*'
-            displayDataOnNextion(data);  // Proses dan simpan data ke SD Card
-          } else {
-            Serial.println("Invalid data format received.");
-          }
-
-          lastDataTime = millis();
+        // Periksa apakah data dimulai dengan '#' dan diakhiri dengan '*'
+        if (data.startsWith("#") && data.endsWith("*")) {
+          data = data.substring(1, data.length() - 1); // Menghapus '#' dan '*'
+          displayDataOnNextion(data);  // Proses dan simpan data ke SD Card
+        } else {
+          Serial.println("Invalid data format received.");
         }
 
-        // Timeout jika client tidak mengirimkan data dalam waktu tertentu
-        if (millis() - lastDataTime > timeoutInterval) {
-          Serial.println("Client disconnected due to timeout.");
-          client.stop();
-          TxtStatus.setText("Client Timeout");
-          break;
-        }
+        lastDataTime = millis();
       }
 
-      if (!client.connected()) {
-        TxtStatus.setText("Waiting for data");
-        Serial.println("Waiting for data");
+      // Timeout jika client tidak mengirimkan data dalam waktu tertentu
+      if (millis() - lastDataTime > timeoutInterval) {
+        Serial.println("Client disconnected due to timeout.");
+        client.stop();
+        TxtStatus.setText("Client Timeout");
+        break;
       }
     }
 
-    client.stop(); // Pastikan koneksi dihentikan setelah permintaan selesai
+    if (!client.connected()) {
+      TxtStatus.setText("Waiting for data");
+      Serial.println("Waiting for data");
+    }
   }
 }
-
 
 void displayDataOnNextion(String data) {
   // Menghilangkan karakter '#' dan '*' dari data
@@ -173,6 +160,7 @@ void displayDataOnNextion(String data) {
   saveDataToSD(parts);
 }
 
+
 void saveDataToSD(String parts[]) {
   // Format: CLIENT,DATE,TIME,RIT,PAYLOAD
   const char* filename = "/data.csv";
@@ -191,7 +179,7 @@ void saveDataToSD(String parts[]) {
   String date = parts[6];      // Tanggal dalam format "dd/mm/yyyy"
   String time = parts[7];      // Waktu dalam format "hh:mm:ss"
 
-  // Parsing tanggal (dd-mm-yyyy)
+  // Parsing tanggal (dd/mm/yyyy)
   String day, month, year;
   int firstDash = date.indexOf('-');
   int secondDash = date.indexOf('-', firstDash + 1);
@@ -224,34 +212,9 @@ void saveDataToSD(String parts[]) {
 }
 
 
+
 int mapGaugeValue(float value, float in_min, float in_max, int out_min, int out_max) {
   if (value < in_min) value = in_min;
   if (value > in_max) value = in_max;
   return (int)((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
-}
-
-
-void serveCSVFile(WiFiClient& client) {
-  const char* filename = "/data.csv";
-
-  if (!SD.exists(filename)) {
-    client.println("HTTP/1.1 404 Not Found");
-    client.println("Content-Type: text/plain");
-    client.println("Connection: close");
-    client.println();
-    client.println("File not found");
-    return;
-  }
-
-  File file = SD.open(filename, FILE_READ);
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/csv");
-  client.println("Connection: close");
-  client.println();
-
-  while (file.available()) {
-    client.write(file.read());
-  }
-
-  file.close();
 }
