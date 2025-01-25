@@ -62,7 +62,7 @@ void setup() {
   }
 }
 
-void loop() { 
+void loop() {
   WiFiClient client = server.available();
 
   if (client) {
@@ -70,39 +70,52 @@ void loop() {
     Serial.println("Client Connected");
     lastDataTime = millis();
 
-    while (client.connected()) {
-      if (client.available()) {
-        String data = client.readStringUntil('\n');
-        data.trim();
+    // Baca permintaan HTTP dari klien
+    String request = client.readStringUntil('\r');
+    client.flush();
 
-        Serial.println("Received Data: " + data);
+    // Periksa apakah klien meminta file /data.csv
+    if (request.indexOf("GET /data.csv") >= 0) {
+      serveCSVFile(client); // Fungsi untuk melayani file data.csv
+    } else {
+      // Proses data biasa
+      while (client.connected()) {
+        if (client.available()) {
+          String data = client.readStringUntil('\n');
+          data.trim();
 
-        // Periksa apakah data dimulai dengan '#' dan diakhiri dengan '*'
-        if (data.startsWith("#") && data.endsWith("*")) {
-          data = data.substring(1, data.length() - 1); // Menghapus '#' dan '*'
-          displayDataOnNextion(data);  // Proses dan simpan data ke SD Card
-        } else {
-          Serial.println("Invalid data format received.");
+          Serial.println("Received Data: " + data);
+
+          // Periksa apakah data dimulai dengan '#' dan diakhiri dengan '*'
+          if (data.startsWith("#") && data.endsWith("*")) {
+            data = data.substring(1, data.length() - 1); // Menghapus '#' dan '*'
+            displayDataOnNextion(data);  // Proses dan simpan data ke SD Card
+          } else {
+            Serial.println("Invalid data format received.");
+          }
+
+          lastDataTime = millis();
         }
 
-        lastDataTime = millis();
+        // Timeout jika client tidak mengirimkan data dalam waktu tertentu
+        if (millis() - lastDataTime > timeoutInterval) {
+          Serial.println("Client disconnected due to timeout.");
+          client.stop();
+          TxtStatus.setText("Client Timeout");
+          break;
+        }
       }
 
-      // Timeout jika client tidak mengirimkan data dalam waktu tertentu
-      if (millis() - lastDataTime > timeoutInterval) {
-        Serial.println("Client disconnected due to timeout.");
-        client.stop();
-        TxtStatus.setText("Client Timeout");
-        break;
+      if (!client.connected()) {
+        TxtStatus.setText("Waiting for data");
+        Serial.println("Waiting for data");
       }
     }
 
-    if (!client.connected()) {
-      TxtStatus.setText("Waiting for data");
-      Serial.println("Waiting for data");
-    }
+    client.stop(); // Pastikan koneksi dihentikan setelah permintaan selesai
   }
 }
+
 
 void displayDataOnNextion(String data) {
   // Menghilangkan karakter '#' dan '*' dari data
@@ -110,7 +123,7 @@ void displayDataOnNextion(String data) {
   data.replace("*", "");
 
   // Array untuk menyimpan nilai parsial data
-  String parts[9] = {"0", "0", "0", "0", "0", "HD78101KM", "01-01-1970", "00:00:00", "0"}; // Default values
+  String parts[9] = {"0", "0", "0", "0", "0", "HD78101KM", "01/01/2025", "00:00:00", "0"}; // Default values
 
   // Parsing data berdasarkan tanda '-'
   int index = 0;
@@ -126,7 +139,7 @@ void displayDataOnNextion(String data) {
   for (int i = 0; i <= 8; i++) {
     if (parts[i] == "") {
       if (i == 5) parts[i] = "HD78101KM";   // Nama unit tetap
-      else if (i == 6) parts[i] = "01-01-1970"; // Default date
+      else if (i == 6) parts[i] = "01/01/2025"; // Default date
       else if (i == 7) parts[i] = "00:00:00";   // Default time
       else if (i == 8) parts[i] = "0";          // Default rit
       else parts[i] = "0";  // Default untuk data tekanan dan payload
@@ -175,7 +188,7 @@ void saveDataToSD(String parts[]) {
   String client = parts[5];    // Nama dump truck
   String payload = parts[4] + "t"; // Payload dengan satuan (t)
   String rit = parts[8];       // Rit
-  String date = parts[6];      // Tanggal dalam format "dd-mm-yyyy"
+  String date = parts[6];      // Tanggal dalam format "dd/mm/yyyy"
   String time = parts[7];      // Waktu dalam format "hh:mm:ss"
 
   // Parsing tanggal (dd-mm-yyyy)
@@ -211,10 +224,34 @@ void saveDataToSD(String parts[]) {
 }
 
 
-
-
 int mapGaugeValue(float value, float in_min, float in_max, int out_min, int out_max) {
   if (value < in_min) value = in_min;
   if (value > in_max) value = in_max;
   return (int)((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+}
+
+
+void serveCSVFile(WiFiClient& client) {
+  const char* filename = "/data.csv";
+
+  if (!SD.exists(filename)) {
+    client.println("HTTP/1.1 404 Not Found");
+    client.println("Content-Type: text/plain");
+    client.println("Connection: close");
+    client.println();
+    client.println("File not found");
+    return;
+  }
+
+  File file = SD.open(filename, FILE_READ);
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/csv");
+  client.println("Connection: close");
+  client.println();
+
+  while (file.available()) {
+    client.write(file.read());
+  }
+
+  file.close();
 }
