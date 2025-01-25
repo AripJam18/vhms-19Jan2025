@@ -303,10 +303,18 @@ void processData(String data) {
 
         // Ambil tanggal (TxtTanggal)
         if (TxtTanggal.getText(dateBuffer, sizeof(dateBuffer))) {
-            cleanString(dateBuffer);  // Bersihkan string dari karakter tidak valid
+        cleanString(dateBuffer);  // Bersihkan string dari karakter tidak valid
+    
+        // Gantilah tanda "-" dengan "/"
+        for (int i = 0; dateBuffer[i] != '\0'; i++) {
+        if (dateBuffer[i] == '-') {
+            dateBuffer[i] = '/';
+            }
+          }
         } else {
-            strcpy(dateBuffer, "01-01-1970");  // Default jika gagal
+          strcpy(dateBuffer, "01/01/2025");  // Default jika gagal
         }
+
 
         // Ambil waktu (TxtJam)
         if (TxtJam.getText(timeBuffer, sizeof(timeBuffer))) {
@@ -380,7 +388,7 @@ void printLast10Data() {
         cleanString(dateBuffer); // Bersihkan string
         Serial.printf("Tanggal: %s\n", dateBuffer);
     } else {
-        strcpy(dateBuffer, "00-00-0000"); // Nilai default jika gagal
+        strcpy(dateBuffer, "01-01-2025"); // Nilai default jika gagal
         Serial.println("Gagal mendapatkan tanggal.");
     }
 
